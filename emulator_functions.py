@@ -3,8 +3,19 @@
 # -*- coding: utf-8 -*-
 
 """
-emu_funs.py
+emulator_functions.py
 Created on 19/06/2023
+
+This file includes all functions used to build, train and apply the emulator.
+
+It is composed of 4 main classes :
+
+Predictors: Pre-process the predictors to feed the network,
+Target: prepare the target variable,
+wrapModel : to train the Unet after building it,
+Pred : to make the prediction. 
+
+
 
 @author: dourya, haradercoustaue
 """
@@ -39,6 +50,8 @@ from tensorflow.keras.layers import Input,  LeakyReLU, Concatenate, Dropout, Con
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import Sequential
+
+# set of functions used accross the different classes
 
 def launch_gpu(num=0):
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -107,26 +120,35 @@ def highestPowerof2(n):
 
     return res;
 
-
+def wmae_gb_glob_quant(alpha,pbeta,quant):  # loss function fro precipitation emulator
+    def wmae_gb(y_true,y_pred):
+        gamma=tf.compat.v1.distributions.Gamma(alpha,pbeta)
+        gamma_coef=tf.cast(gamma.cdf(tf.cast(tf.subtract(y_true,tf.cast(quant[None,:,:],tf.float32)),tf.float64))**2,tf.float64)
+        beta = tf.cast(tf.where(tf.math.is_nan(gamma_coef),tf.zeros_like(gamma_coef),gamma_coef),tf.float32)
+        ext=beta*tf.maximum(tf.zeros(y_true.shape[1:]),y_true-y_pred)
+        return(tf.reduce_mean(tf.losses.mae(y_true,y_pred)+ext[:,:,:,0]))
+    return(wmae_gb)
 
 class Pred: 
-    def __init__(self, domain: str, 
-                 domain_size,
-                 inputIn=[None],
-                 filepath_grid= None,
-                 filepath_out=None, 
-                 filepath_mask=None, 
-                 filepath_model=None,
-                 target_var='tas',
-                 attributes=None):
+    def __init__(self, 
+                 domain: str,  # Target domain 
+                 domain_size,  # Size of the target domain
+                 inputIn=[None], # list of Perdictors objects
+                 filepath_grid= None, # path to a .nc file containing the grid informations to put in the output file
+                 filepath_out=None, # path where to save the output file
+                 filepath_model=None,  # path to the emulator file
+                 target_var='tas', # variable to emulate 
+                 attributes=None #list of attributes to pass to the output file
+                ):
         self.domain = Domain(domain, domain_size) 
         self.targetGrid = Grid(filepath_grid) 
 
-        # inputIn must be a list of inputs 
+        # Create a prediction for the inputs passed in inputIn for the model passed in 'filepath_model'
+        # inputIn must be a list of Predictors objects 
         # This is so we can concatenate inputs together from different scenarios if desired 
         # DONT use Pred with raw numpy 1D/2D inputs, the concatenate function below will flatten the 
         # zeroeth dimension and cause the code to fail. 
-        # NB : input2D/1D = numpy arrays, timeout = xr DataArray 
+        # NB : input2D/1D = numpy arrays, timeout = xr DataArray
 
         input2D = []
         input1D = []
@@ -180,24 +202,22 @@ class Pred:
         
         return final      
 
-def wmae_gb_glob_quant(alpha,pbeta,quant):
-    def wmae_gb(y_true,y_pred):
-        gamma=tf.compat.v1.distributions.Gamma(alpha,pbeta)
-        gamma_coef=tf.cast(gamma.cdf(tf.cast(tf.subtract(y_true,tf.cast(quant[None,:,:],tf.float32)),tf.float64))**2,tf.float64)
-        beta = tf.cast(tf.where(tf.math.is_nan(gamma_coef),tf.zeros_like(gamma_coef),gamma_coef),tf.float32)
-        ext=beta*tf.maximum(tf.zeros(y_true.shape[1:]),y_true-y_pred)
-        return(tf.reduce_mean(tf.losses.mae(y_true,y_pred)+ext[:,:,:,0]))
-    return(wmae_gb)
 
 
 
-# This class cannot be fully tested without missing unet_maker module 
 
 class wrapModel: 
-    def __init__(self, inputIn = None, targetIn=None,target_var=None,filepath_model=None, 
-                 filepath_sftlf=None, filepath_grid=None,filepath_gamma_param=None, batch_size=32, LR=0.005):
+    def __init__(self, inputIn = None, #predictor list
+                 targetIn=None, #corresponding target list (supervised training)
+                 target_var=None, # name of target variable
+                 filepath_model=None, # path where to save the model
+                 filepath_sftlf=None, # 
+                 filepath_grid=None,
+                 filepath_gamma_param=None,
+                 batch_size=32, LR=0.005):
 
-        # inputIn and tagretIn must be lists of inputs and targets  
+        # Build and train the emulator 
+        # inputIn and tagretIn must be lists of Predictors and Targets objects  
         # This is so we can concatenate inputs together from different scenarios if desired 
         # DONT use Model with raw numpy 1D/2D inputs, the concatenate function below will flatten the 
         # zeroeth dimension and cause the code to fail. 
@@ -218,7 +238,8 @@ class wrapModel:
 
     
     def unet_maker(self, nb_inputs, size_target_domain, shape_inputs, filters):
-             
+        # draw the network according to the predictors and target shapes.
+        
         inputs_list=[]
         size=np.min([highestPowerof2(shape_inputs[0][0]),highestPowerof2(shape_inputs[0][1])])
         if nb_inputs==1:
@@ -371,12 +392,24 @@ class wrapModel:
 
 
 class Predictors:
-
-    def __init__(self,domain: str, domain_size,filepath=None,filepath_ref=None,stand=1,var_list=[None],ref_period=['1971','2000'], 
-                 aero_ext=None,filepath_aero=None,aero_stdz=False,
-                 filepath_forc=None,
-                 opt_ghg='ONE',means='s',stds='s'
-                 ,seas=True,aero_var='aero'):
+    #make the predictors following a set of parameters to define 
+    def __init__(self,
+                 var_list=[None],                 # List of predictors (2D)
+                 domain: str,                     # output domain name, must be defined in the class Domain
+                 domain_size,                     # size of the input domain, can be integer or tuple, must be define in the class domain. 
+                 filepath=None,                   # path to the input file, must be a .nc file containing all 2D variables used as predictors (except aerosols) 
+                 filepath_ref=None,               # path to the file used to normalize the inputs, must be similar to 'filepath'
+                 stand=1,                         # way to standardize the data, see strandardize functions upper
+                 ref_period=['1971','2000'],      # reference periode to use for normalisation
+                 means='s',stds='s',              # If stand = 1, to include or not ('n') the means and standard deviation
+                 aero_ext=False,                  # Bool, to be True if aerosols variable is not in the input file 
+                 filepath_aero=None,              # path to aerosol files (only if not in the input file)
+                 aero_stdz=False,                 # Bool, to normalise or not the inputs
+                 aero_var='aero'                  # name of aero variable in filepath_aero
+                 filepath_forc=None,              # path to the .csv file containing external forcings (GHG, solar, ozone...)
+                 opt_ghg='ONE',                   # Option for the ghg, each comoponent (CO2, CH4....) seperately ('MULTI') or concatenated ('ONE') in C02 equivalent. 
+                 seas=True                       # Bool, to include or not a cosine&sine vector for the season
+                ):
 
         self.domain=Domain(domain, domain_size)
         with tf.device("/cpu:0"):
@@ -546,7 +579,12 @@ class Predictors:
 
 
 class Target:
-    def __init__(self,target_var,filepath=None,filepath_grid=None):
+    # Prepare target 
+    def __init__(self,
+                 target_var,            # target var name
+                 filepath=None,         # path to a file containing the output variable on a domain including the output domain
+                 filepath_grid=None     # path to a file containing the output file grid
+                ):
         print("Initializing Lambert grid, this may (and should) fail for other grid types") 
         if filepath_grid:
             grid=xr.open_dataset(filepath_grid)
