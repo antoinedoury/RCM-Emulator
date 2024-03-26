@@ -17,7 +17,7 @@ Pred : to make the prediction.
 
 
 
-@author: dourya, haradercoustaue
+@author: Antoine Doury, Elizabeth Harader-Coustau
 """
 
 import sys
