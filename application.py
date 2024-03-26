@@ -34,21 +34,22 @@ filename='tas_ALPX-12_CNRM-CM6_historical_r15i1p1f2_CNRM_CNRM-ALADIN63-emul-CNRM
 
 
 namelist_out = UserDict({ 
-    'target_var':'pr',
+    'target_var':'tas',
     'domain':'FRA', 
-    'domain_size':(22,16), 
-    'filepath_in':dir_cm6+'cassou_ens/CNRM-CM6-1_historical_r15i1p1f2/X_fullvar_smth3_historical_r15i1p1f_1950-2014.nc', 
-    'filepath_ref':'/cnrm/mosca/USERS/dourya/NO_SAVE/data_NN/input/X_UP_RCM/APPLICATION/HIST/smoothed/X_EUC12_fullvar_smth3_aero.nc', 
+    'domain_size':(20,16), 
+    'filepath_in':'path to file containing inputs to downscale', 
+    'filepath_ref':'same ref file as the one used for training', 
     'var_list' : var0_nosfc1, 
     'opt_ghg' : 'ONE', 
-    'filepath_forc' : dir_cm6+'GHG/GHG_CMIP6ssp245.csv',
-    'filepath_grid' : '/cnrm/mosca/USERS/dourya/NO_SAVE/data_NN/target/2D/FRA_BOX1/grid_frabox.nc',
-    'filepath_model' : '/cnrm/mosca/USERS/dourya/NO_SAVE/NN_models/development/FRA/emul_pr_vpaper_fra_nosfc_cnrm_2216.h5'   ,
-    'filepath_aero':'/cnrm/mosca/USERS/dourya/NO_SAVE/DATA/CNRM-CM6/AEROSOLS/od550aer_AERday_CNRM-CM6-1_historical_r1i1p1f2_gr_185001-201412.nc',
+    'filepath_forc' : 'path to correspong external forcings',
+    'filepath_grid' : 'path to output domain grid',
+    'filepath_model' : 'pathto emulator trained'   ,
+    'filepath_aero':'path to corresponding aerosols file',
     'aero_ext':True,'aero_stdz':True,'aero_var':'od550aer',
-    'filepath_out':dir_cm6+'cassou_ens/CNRM-CM6-1_historical_r15i1p1f2/'+filename,
+    'filepath_out':'path to save the output file'+filename,
     })
 
+### example of CMIP lookalike attributes
 attributes={
     "Conventions" : 'CF-1.10',
         "activity_id": 'emulation',
