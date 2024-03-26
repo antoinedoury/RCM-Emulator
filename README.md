@@ -12,7 +12,8 @@ training_example.py illustrates how to train the emulator. The design of the net
 application.py illustrates how to use a trained emulator.
 
 
-The X_EUC12_fullvar_smth3_aero......nc is an example of the shape of an input file to be passed to the predictor class
+The X_EUC12_fullvar_smth3_aero......nc is an example of the shape of an input file to be passed to the predictor class.
+
 The GHG....csv is an example of external forcing file for RCP85. 
 
 Doury, A., Somot, S., Gadat, S. et al. Regional climate model emulator based on deep learning: concept and first evaluation of a novel hybrid downscaling approach. Clim Dyn (2022). https://doi.org/10.1007/s00382-022-06343-9
